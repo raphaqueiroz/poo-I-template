@@ -2,6 +2,8 @@ import express, { Request, Response } from 'express'
 import cors from 'cors'
 import { TAccountDB, TAccountDBPost, TUserDB, TUserDBPost } from './types'
 import { db } from './database/knex'
+import { User } from './models/User'
+import { Account } from './models/Account'
 
 const app = express()
 
@@ -44,7 +46,17 @@ app.get("/users", async (req: Request, res: Response) => {
             usersDB = result
         }
 
-        res.status(200).send(usersDB)
+        const users: User[] = usersDB.map((user) => {
+            return new User(
+                user.id,
+                user.name,
+                user.email,
+                user.password,
+                user.created_at
+            )
+        })
+
+        res.status(200).send(users)
     } catch (error) {
         console.log(error)
 
@@ -91,14 +103,32 @@ app.post("/users", async (req: Request, res: Response) => {
             throw new Error("'id' já existe")
         }
 
-        const newUser: TUserDBPost = {
+        /* const newUser: TUserDBPost = {
             id,
             name,
             email,
             password
         }
+ */
+// Variável necessita da incrementação de "createdAt" pois segue o modelo User;
+        const newUser: User = new User(
+            id,
+            name,
+            email,
+            password,
+            new Date().toISOString() // <<<<<
+        )
 
-        await db("users").insert(newUser)
+        const newUserDB: TUserDB = {
+            id: newUser.getId(),
+            name: newUser.getName(),
+            email: newUser.getEmail(),
+            password: newUser.getPassword(),
+            created_at: newUser.getCreatedAt()
+        }
+
+
+        await db("users").insert(newUserDB)
         const [ userDB ]: TUserDB[] = await db("users").where({ id })
 
         res.status(201).send(userDB)
@@ -148,7 +178,14 @@ app.get("/accounts/:id/balance", async (req: Request, res: Response) => {
             throw new Error("'id' não encontrado")
         }
 
-        res.status(200).send({ balance: accountDB.balance })
+        const account: Account = new Account(
+            accountDB.id,
+            accountDB.owner_id,
+            accountDB.balance,
+            accountDB.created_at
+        )
+
+        res.status(200).send({ balance: account.getBalance() })
     } catch (error) {
         console.log(error)
 
@@ -186,12 +223,24 @@ app.post("/accounts", async (req: Request, res: Response) => {
             throw new Error("'id' já existe")
         }
 
-        const newAccount: TAccountDBPost = {
+        /* const newAccount: TAccountDBPost = {
             id,
             owner_id: ownerId
-        }
+        } */
 
-        await db("accounts").insert(newAccount)
+        const newACcount = new Account(
+            id,
+            ownerId,
+            0,
+            new Date().toISOString()
+        )
+
+        const newAccoundDB: TAccountDBPost = {
+            id: newACcount.getId(),
+            owner_id: newACcount.getOwnerId()
+        } 
+
+        await db("accounts").insert(newAccoundDB)
         const [ accountDB ]: TAccountDB[] = await db("accounts").where({ id })
 
         res.status(201).send(accountDB)
@@ -227,11 +276,20 @@ app.put("/accounts/:id/balance", async (req: Request, res: Response) => {
             throw new Error("'id' não encontrado")
         }
 
-        accountDB.balance += value
+        const account: Account = new Account(
+            accountDB.id,
+            accountDB.owner_id,
+            accountDB.balance,
+            accountDB.created_at
+        )
 
-        await db("accounts").update({ balance: accountDB.balance }).where({ id })
+        account.setBalance(value) // método criado para alterar o balance;
+
+        //accountDB.balance += value
+
+        await db("accounts").update({ balance: account.getBalance() }).where({ id })
         
-        res.status(200).send(accountDB)
+        res.status(200).send(account)
     } catch (error) {
         console.log(error)
 
